@@ -17,16 +17,26 @@ def denormalize_x(p):
 def denormalize_y(p):
     return round(p * max(IMG_W, IMG_H) - 0.5 + IMG_H / 2.0)
 
-def read_tracks_csv(trackscsv_path = 'tracks.csv'):
+def read_tracks_csv(trackscsv_path = 'tracks.csv', get_tracks_im=False):
     tracks = {}
+    tracks_im = {}
     f = csv.reader(open(trackscsv_path, 'r'), delimiter='\t')
     next(f, None)
     for l in f:
         (im, track_id, feature_id, x, y, scale, r, g, b) = tuple(l)
+
         if track_id not in tracks:
             tracks[track_id] = []
         tracks[track_id].append((im, feature_id, x, y, scale, int(r), int(g), int(b)))
-    return tracks
+
+        if im not in tracks_im:
+            tracks_im[im] = []
+        tracks_im[im].append((track_id, feature_id, x, y, scale, int(r), int(g), int(b)))
+
+    if not get_tracks_im:
+        return tracks
+    elif get_tracks_im:
+        return tracks, tracks_im
 
 def load_reconjson(reconjson_path='reconstruction.json'):
     return json.loads(open(reconjson_path).read())[0]

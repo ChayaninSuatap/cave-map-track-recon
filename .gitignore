@@ -18,3 +18,5 @@ __pycache__/
 obj2ply/
 
 *.json
+
+GHHALF_fs_15/

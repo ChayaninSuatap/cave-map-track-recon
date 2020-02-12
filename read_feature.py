@@ -28,6 +28,12 @@ def get_fids_from_tracks(img_fn, tracks):
                 output.append( track_elem[1])
     return output
 
+def get_fids_from_tracks_im(img_fn, tracks_im):
+    output = []
+    for track_elem in tracks_im[img_fn]:
+        output.append( track_elem[1])
+    return output
+
 if __name__ == '__main__':
     pass
     # fids = get_fids_from_tracks(img_fn = '001.jpg')

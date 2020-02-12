@@ -1,5 +1,5 @@
 from map_track_reconstruction import read_tracks_csv, load_reconjson
-from read_feature import get_xy_from_features, get_fids_from_tracks
+from read_feature import get_xy_from_features, get_fids_from_tracks, get_fids_from_tracks_im
 from math import atan2, pi, fabs
 from scipy.spatial.transform import Rotation as R
 from plyfile import PlyData, PlyElement
@@ -9,13 +9,14 @@ sys.path.append('obj2ply')
 import obj2ply.convert
 import os
 
-def get_nearest_center_trackid_xy(path, img_fn, recon_trackids, tracks_csv):
+
+def get_nearest_center_trackid_xy(path, img_fn, recon_trackids, tracks_csv, tracks_im):
     #open track.csv
     tracks = tracks_csv
     #open feature file
     points = get_xy_from_features(path + 'opensfm/features/%s.features.npz' % (img_fn,), denormalize=False)
     #filter feature point that not in track
-    valid_fids = get_fids_from_tracks(img_fn, tracks)
+    valid_fids = {k:0 for k in get_fids_from_tracks_im(img_fn, tracks_im)}
     points = [(i,point) for i,point in enumerate(points) if str(i) in valid_fids]
     #find nearest center point
     def compare_fn(e):
@@ -25,12 +26,16 @@ def get_nearest_center_trackid_xy(path, img_fn, recon_trackids, tracks_csv):
     sorted_points = sorted(points, key=compare_fn)
     #find track id from fid and img_fn
     for (fid,(x,y)) in sorted_points:
-        for track_id in tracks.keys():
-            if track_id not in recon_trackids:
-                continue
-            for track_elem in tracks[track_id]:
-                if track_elem[0] == img_fn and track_elem[1] == str(fid): #test img_fn and fid
-                    return (track_id, x, y)
+
+        for track_elem in tracks_im[img_fn]:
+            elem_track_id = track_elem[0]
+            elem_fid = track_elem[1]
+
+            if elem_track_id not in recon_trackids: continue
+
+            if elem_fid == str(fid):
+                return (elem_track_id, x, y)
+
     #cant find
     return ('sorry', 'cant', 'find')
 
@@ -38,13 +43,14 @@ def get_coord_from_reconjson_by_trackid(recon, trackid):
     x, y, z = recon['points'][str(trackid)]['coordinates']
     return float(x), float(y), float(z)
 
-def get_coords_from_selected_center_image(path, img_fn, recon, tracks_csv):
+def get_coords_from_selected_center_image(path, img_fn, recon, tracks_csv, recon_track_id_dict, tracks_im):
 
     track_id, feature_x, feature_y = get_nearest_center_trackid_xy(
         path,
         img_fn,
-        recon['points'].keys(),
-        tracks_csv)
+        recon_track_id_dict,
+        tracks_csv,
+        tracks_im)
     
     if (track_id, feature_x, feature_y) == ('sorry', 'cant', 'find'):
         return False
@@ -79,22 +85,27 @@ if __name__ == '__main__':
     #(distance, rotate_rad, x, y, z)
     records = []
     recon = load_reconjson(path + 'opensfm/reconstruction.json')
-    tracks_csv = read_tracks_csv(path + 'opensfm/tracks.csv')
+    recon_track_id_dict = {k:0 for k in recon['points'].keys()}
+    tracks_csv, tracks_im = read_tracks_csv(path + 'opensfm/tracks.csv', get_tracks_im=True)
+
     for image_fn in os.listdir(path + 'images/'):
         print('scanning', image_fn)
 
-        result = get_coords_from_selected_center_image(path, image_fn, recon, tracks_csv)
+        result = get_coords_from_selected_center_image(path, image_fn, recon, tracks_csv, recon_track_id_dict, tracks_im)
         if result == False:
             continue
 
         pcx, pcy, pcz, feature_x, feature_y = result
         rotate_rad = float(image_fn.split('_')[1][:-4])
         
-        record = (fabs(feature_y), image_fn, rotate_rad, pcx, pcy, pcz)
+        record = (feature_x, feature_y, image_fn, rotate_rad, pcx, pcy, pcz)
         records.append( record)
-    best_record = min(records, key = lambda x: x[0])
-    _,img_name, anchor_rad, pcx, pcy, pcz = best_record
+    
+    best_record = min(records, key = lambda x : (x[0]**2 + x[1]**2)**(1/2))
+
+    feature_x, feature_y, img_name, anchor_rad, pcx, pcy, pcz = best_record
     print('img name', img_name)
+    print('feature_x feature_y x y z',feature_x, feature_y, pcx, pcy, pcz)
     print('will rotate to angle', anchor_rad * 57.2958)
     ### 
     # selected_img_fn = input('select most vertical image : ')
