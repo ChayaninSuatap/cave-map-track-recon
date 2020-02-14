@@ -8,6 +8,7 @@ import sys
 sys.path.append('obj2ply')
 import obj2ply.convert
 import os
+from auto_rotate import get_coords_from_selected_center_image
 
 def get_nearest_center_trackid_xy(path, img_fn, recon_trackids, tracks_csv):
     #open track.csv
@@ -38,20 +39,6 @@ def get_coord_from_reconjson_by_trackid(recon, trackid):
     x, y, z = recon['points'][str(trackid)]['coordinates']
     return float(x), float(y), float(z)
 
-def get_coords_from_selected_center_image(path, img_fn, recon, tracks_csv):
-
-    track_id, feature_x, feature_y = get_nearest_center_trackid_xy(
-        path,
-        img_fn,
-        recon['points'].keys(),
-        tracks_csv)
-    
-    if (track_id, feature_x, feature_y) == ('sorry', 'cant', 'find'):
-        return False
-
-    # #get point that should be at center ( y = 0)
-    x, y, z = get_coord_from_reconjson_by_trackid(recon, track_id)
-    return x, y, z, feature_x, feature_y
 
 def compute_rotate_rad(y,x, anchor_rad):
     return anchor_rad - atan2(y,x)
@@ -103,7 +90,8 @@ if __name__ == '__main__':
     #pre
     records = []
     recon = load_reconjson(path + 'opensfm/reconstruction.json')
-    tracks_csv = read_tracks_csv(path + 'opensfm/tracks.csv')
+    recon_track_id_dict = {k:0 for k in recon['points'].keys()}
+    tracks_csv, tracks_im = read_tracks_csv(path + 'opensfm/tracks.csv', get_tracks_im=True)
 
     #get all center point of images
     #(x, y, z)
@@ -111,7 +99,7 @@ if __name__ == '__main__':
     for image_fn in os.listdir(path + 'images/'):
         print('scanning', image_fn)
 
-        result = get_coords_from_selected_center_image(path, image_fn, recon, tracks_csv)
+        result = get_coords_from_selected_center_image(path, image_fn, recon, tracks_csv, recon_track_id_dict, tracks_im)
         if result == False:
             continue
 
@@ -127,12 +115,6 @@ if __name__ == '__main__':
         for j in range(i+1, len(records)):
            _, x1, y1, z1, rad1, _, _ = records[i]
            _, x2, y2, z2, rad2, _, _ = records[j] 
-
-           #old
-           #no z
-        #    distance = ((x1-x2)**2 + (y1-y2)**2)**(1/2)
-           #with z
-        #    distance = ((x1-x2)**2 + (y1-y2)**2 + (z1-z2)**2)**(1/2)
 
            #new
            rad1 = 2*pi + rad1 if rad1 < 0 else rad1
@@ -163,8 +145,12 @@ if __name__ == '__main__':
     x2,y2,z2 = compute_average_coord(img_fn2, recon, tracks_csv)
 
     distance = compute_distance_2d(x1, y1, x2, y2)
+    distance3d = compute_distance(x1, y1, z1, x2, y2, z2)
     scale_factor = real_distance / distance
-    print('ply distance',distance)
+
+    print('scale factor', scale_factor)
+    print('ply distance2d', distance)
+    print('ply distance3d', distance3d)
 
     #convert obj to ply
     obj2ply.convert.obj2ply(path + 'odm_texturing/odm_textured_model.obj', path + 'odm_texturing/odm_textured_model.ply')

@@ -20,3 +20,5 @@ obj2ply/
 *.json
 
 GHHALF_fs_15/
+
+*.ply
